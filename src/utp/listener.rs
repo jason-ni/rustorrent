@@ -219,6 +219,7 @@ impl UtpListener {
     }
 
     pub async fn connect(&self, sockaddr: SocketAddr) -> Result<UtpStream> {
+        log::debug!("connecting to {:?}", &sockaddr);
         let (on_connected, is_connected) = oneshot::channel();
 
         let state = State::with_utp_state(UtpState::MustConnect);

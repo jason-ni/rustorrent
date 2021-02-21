@@ -182,7 +182,7 @@ impl UtpManager {
             to_send: VecDeque::new(),
             need_send: NeedToSend::new(),
             timeout: Instant::now() + Duration::from_secs(3),
-            ntimeout: 0,
+            ntimeout: 3,
             on_connected,
             last_ack: SequenceNumber::zero(),
             ack_duplicate: 0,
@@ -245,6 +245,7 @@ impl UtpManager {
     }
 
     pub(super) async fn start(mut self) -> Result<()> {
+        log::debug!("manager starting");
         use UtpError::SendWouldBlock;
 
         self.ensure_connected();
@@ -280,6 +281,7 @@ impl UtpManager {
     }
 
     fn process_incoming(&mut self, event: UtpEvent) -> Result<()> {
+        log::debug!("manager processing event: {:?}", event);
         match event {
             UtpEvent::IncomingPacket { packet } => {
                 // println!("== Incoming received {:?}", packet);
@@ -294,9 +296,10 @@ impl UtpManager {
                 }
             }
             UtpEvent::Timeout => {
-                // println!("== timeout {:?}", self.ntimeout);
+                log::debug!("== timeout {:?}", self.ntimeout);
                 if Instant::now() > self.timeout {
-                    self.on_timeout()?;
+                    log::debug!("hit timeout limit");
+                    self.on_timeout().map_err(|e| {log::debug!("on_timeout error : {:?}", &e); e})?;
                 }
             }
             UtpEvent::Writable => {
@@ -331,6 +334,7 @@ impl UtpManager {
     }
 
     fn on_timeout(&mut self) -> Result<()> {
+        log::debug!("handling timeout");
         use UtpState::*;
 
         let utp_state = self.state.utp_state();
@@ -813,6 +817,11 @@ impl UtpManager {
     }
 
     fn send_fin(&mut self) {
+        log::debug!("sending fin on drop: {:?}", self.state.utp_state());
+        match self.state.utp_state() {
+            UtpState::None | UtpState::SynSent => return,
+            _ => ()
+        };
         let mut packet = Packet::new_type(PacketType::Fin);
 
         let ack_number = self.ack_bitfield.current();
